@@ -1,0 +1,1 @@
+dbt run --model tag:trusted --profiles-dir ..\pw_bi_b3\dbt_b3\ --project-dir ..\pw_bi_b3\dbt_b3\ --target trusted

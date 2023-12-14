@@ -1,0 +1,7 @@
+*cpython-311.pyc
+.gitignore
+/.venv/*
+/config/*
+/scripts/extract_api_b3_retroactive.py
+/scripts/extract_api_statusinvest.py
+creds.json

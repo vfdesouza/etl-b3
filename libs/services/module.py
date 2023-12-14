@@ -4,6 +4,8 @@ import zipfile
 import re
 import pandas as pd
 
+from datetime import datetime, timedelta
+from typing import Optional
 from io import BytesIO
 from time import sleep
 from requests.adapters import HTTPAdapter
@@ -18,7 +20,6 @@ from dotenv import load_dotenv
 from libs.services.logger import Logger
 
 load_dotenv()
-
 
 BASE_URL_B3 = os.getenv("BASE_URL_B3")
 BASE_URL_STATUS_INVEST = os.getenv("BASE_URL_STATUS_INVEST")
@@ -47,6 +48,11 @@ class Module:
             )
 
             return None
+
+    def remove_file(self, directory: str) -> None:
+        if os.path.exists(directory):
+            os.remove(directory)
+            Logger.warning(message=("------------------------------------------------"))
 
     def retry_request(self, url):
         try:
@@ -85,7 +91,6 @@ class Module:
 
             if response.status_code == 200:
                 lista_de_jsons = response.json()
-                print(lista_de_jsons)
                 break
             else:
                 Logger.error(
@@ -100,28 +105,66 @@ class Module:
                     )
         return lista_de_jsons
 
-    def download_file_zip_from_txt(self, years: list, url=BASE_URL_B3) -> list | None:
-        list_directories = []
-        for year in years:
-            url = f"{BASE_URL_B3}/COTAHIST_A{year}.ZIP"
-            directory = re.search(r"\d{4}", url).group()
+    def check_day_week(self, type_format: str):
+        day_week = str(datetime.now().strftime("%A"))
 
-            filename = url.split("/")[-1]
+        day_mapping = {
+            "Tuesday": 1,
+            "Wednesday": 1,
+            "Thursday": 1,
+            "Friday": 1,
+            "Saturday": 1,
+            "Sunday": 2,
+            "Monday": 3,
+        }
 
-            # Downloading the file by sending the request to the URL
+        interval = day_mapping.get(day_week)
+
+        check_format = {"date": "%Y-%m-%d", "date_br": "%d%m%Y"}
+
+        date_format = check_format.get(type_format)
+
+        return (datetime.now().date() - timedelta(days=interval)).strftime(
+            format=date_format
+        )
+
+    def download_file_zip_from_txt(
+        self, type_extraction: str, base_url=BASE_URL_B3, years: Optional[list] = None
+    ) -> str | list:
+        if type_extraction == "daily":
+            extraction_date = self.check_day_week(type_format="date_br")
+
+            url = f"{base_url}/COTAHIST_D{extraction_date}.ZIP"
+
+            filename = f"COTAHIST_D{extraction_date}.TXT"
+
             response = self.retry_request(url)
 
-            # Extracting the zip file contents (renamed the variable to zipf)
+            with zipfile.ZipFile(BytesIO(response.content), "r") as zipf:
+                zipf.extractall(path=f"./data/")
+
+            return f"./data/{filename}"
+
+        elif type_extraction == "retroactive":
+            list_directories = []
+            for year in years:
+                url = f"{base_url}/COTAHIST_A{year}.ZIP"
+                directory = re.search(r"\d{4}", url).group()
+
+                filename = url.split("/")[-1]
+
+                response = self.retry_request(url)
+
             with zipfile.ZipFile(BytesIO(response.content), "r") as zipf:
                 zipf.extractall(path=f"./data/{directory}")
             list_directories.append(
                 [directory, f"./data/{directory}/{filename}".replace(".ZIP", ".TXT")]
             )
 
-        return list_directories
+            return list_directories
 
     def load_txt_from_dataframe(
-        self, path_to_file: str, list_companies: list
+        self, path_to_file: str, list_companies: Optional[list] = None
     ) -> pd.DataFrame():
         columns_size = [
             2,
@@ -157,7 +200,7 @@ class Module:
             "cod_bdi",
             "cod_negociacao",
             "tipo_mercado",
-            "noma_empresa",
+            "nome_empresa",
             "especificacao_papel",
             "prazo_dias_merc_termo",
             "moeda_referencia",
@@ -197,13 +240,13 @@ class Module:
             "preco_exercicio_pontos",
         ]
 
-        df_filter_companies = df_full[df_full["cod_negociacao"].isin(list_companies)]
+        # df_filter_companies = df_full[df_full["cod_negociacao"].isin(list_companies)]
 
-        df_filter_companies.loc[:, adjust_values] = df_filter_companies[
-            adjust_values
-        ].apply(lambda x: x / 100)
+        df_full.loc[:, adjust_values] = df_full[adjust_values].apply(lambda x: x / 100)
 
-        return df_filter_companies.astype(str)
+        self.remove_file(directory=path_to_file)
+
+        return df_full.astype(str)
 
     def load_table_from_dataframe_partitioning(
         self,
@@ -252,12 +295,12 @@ class Module:
 
         try:
             bigquery_client.get_table(table_ref)
-            return Logger.warning(message=f"Table {table_name} already exists.")
+            Logger.warning(message=f"Table {table_name} already exists.")
         except NotFound:
             Logger.warning(message=f"Table {table_name} does not exist. Creating...")
 
-        parquet_options = bigquery.ParquetOptions()
-        parquet_options.enable_list_inference = False
+        # parquet_options = bigquery.ParquetOptions()
+        # parquet_options.enable_list_inference = False
 
         job_config = bigquery.LoadJobConfig(
             schema=[
@@ -267,7 +310,7 @@ class Module:
             ignore_unknown_values=True,
             time_partitioning=table.time_partitioning,
             clustering_fields=table.clustering_fields,
-            parquet_options=parquet_options,
+            # parquet_options=parquet_options,
         )
 
         job = bigquery_client.load_table_from_dataframe(

@@ -1,4 +1,8 @@
+config/credentials/
+*.json
 *cpython-311.pyc
 creds.json
 .venv
 .env
+config/airflow/
+active/analytics*

@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: b3_raw_zone
+    description: "A starter dbt model"
+    dataset: b3_raw_zone
+    tables:
+      - name: b3_retroactive
+      - name: b3
