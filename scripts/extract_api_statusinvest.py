@@ -36,7 +36,7 @@ def main(companies: list) -> None:
     )
 
     func.load_table_from_dataframe_partitioning(
-        dataset=DATASET_RAW_ZONE_STATUS_INVEST,
+        dataset="b3_raw_zone",
         table_name=f"status_invest",
         column_partitioning="year",
         type_column_partitioning="DATE",
@@ -47,4 +47,16 @@ def main(companies: list) -> None:
 
 
 if __name__ == "__main__":
-    main(["EMBR3", "PETR4", "NTCO3", "GGBR4", "CPLE6"])
+    main(
+        [
+            "CSNA3",
+            "ALSO3",
+            "CPLE6",
+            "EMBR3",
+            "PETR4",
+            "NTCO3",
+            "RAIL3",
+            "GGBR4",
+            "ASAI3",
+        ]
+    )
